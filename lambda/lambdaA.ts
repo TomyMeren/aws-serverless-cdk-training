@@ -1,22 +1,40 @@
-import {S3Event} from 'aws-lambda';
-import {S3Client, GetObjectCommand} from '@aws-sdk/client-s3';
+import * as AWS from 'aws-sdk';
+import { S3Event } from 'aws-lambda';
+import * as zlib from 'zlib';
+import { promisify } from 'util';
 
-const s3Client = new S3Client();
+const gzip = promisify(zlib.gzip);
 
-export const handler = async function(event: S3Event) {
-    const bucketName = event.Records[0].s3.bucket.name;
-    const objectKey = event.Records[0].s3.object.key;
+export async function handler(event: S3Event): Promise<any> {
+  const s3 = new AWS.S3();
 
-    // S3 get object
+  const bucketName = 'xebiaserverlescdktrainingstack-inputbucket08d572f4-qvqfnssroxgn';
 
-    const response = await s3Client.send(
-        new GetObjectCommand({
+  for (const record of event.Records) {
+    const key = record.s3.object.key;
+
+    try {
+      // Retrieve file from S3
+      const params = {
+        Bucket: record.s3.bucket.name,
+        Key: key,
+      };
+
+      const data = await s3.getObject(params).promise();
+
+      // Zip file
+      const zippedData = await gzip(data.Body as Buffer);
+
+      // Save zipped file to another bucket
+      const uploadParams = {
         Bucket: bucketName,
-        Key: objectKey
-    })
-    );
+        Key: key + '.gz', // Appending .gz extension to indicate it's gzipped
+        Body: zippedData,
+      };
 
-    const body = await response.Body?.transformToString();
-
-    console.log("The file HelloWordFile.txt was uploaded to the bucket " + bucketName + " and the content is: " + body);
-};
+      await s3.putObject(uploadParams).promise();
+    } catch (error) {
+      console.error(`Failed to process ${key}: ${error}`);
+    }
+  }
+} 
