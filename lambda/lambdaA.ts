@@ -1,22 +1,54 @@
-import {S3Event} from 'aws-lambda';
-import {S3Client, GetObjectCommand} from '@aws-sdk/client-s3';
+import * as AWS from 'aws-sdk';
+import { S3Event } from 'aws-lambda';
+import * as zlib from 'zlib';
+import { promisify } from 'util';
 
-const s3Client = new S3Client();
+const gzip = promisify(zlib.gzip);
 
-export const handler = async function(event: S3Event) {
-    const bucketName = event.Records[0].s3.bucket.name;
-    const objectKey = event.Records[0].s3.object.key;
+export async function handler(event: S3Event): Promise<any> {
+  const s3 = new AWS.S3();
 
-    // S3 get object
+  const inputBucketName = 'xebiaserverlescdktrainingstack-inputbucket08d572f4-qvqfnssroxgn';
+  const failBucketName = 'xebiaserverlescdktrainingsta-failurebucket4b3e4892-r8rqpkovpiqv';
 
-    const response = await s3Client.send(
-        new GetObjectCommand({
-        Bucket: bucketName,
-        Key: objectKey
-    })
-    );
+  for (const record of event.Records) {
+    const key = record.s3.object.key;
 
-    const body = await response.Body?.transformToString();
+    try {
+      // Retrieve file from S3
+      const params = {
+        Bucket: record.s3.bucket.name,
+        Key: key,
+      };
 
-    console.log("The file HelloWordFile.txt was uploaded to the bucket " + bucketName + " and the content is: " + body);
-};
+      const data = await s3.getObject(params).promise();
+      const body = data.Body as Buffer;
+
+      //Check if the file cointains the word "Hello"
+      if (body.toString().includes('Hello')) {
+        // Save file to another bucket after zip
+        // Zip file
+        const zippedData = await gzip(data.Body as Buffer);
+
+        const uploadParams = {
+          Bucket: inputBucketName,
+          Key: key + '.gz',
+          Body: zippedData,
+        };
+
+        await s3.putObject(uploadParams).promise();
+      } else {
+        // Save file to another bucket
+        const uploadParams = {
+          Bucket: failBucketName,
+          Key: key,
+          Body: data.Body,
+        };
+
+        await s3.putObject(uploadParams).promise();
+      }
+    } catch (error) {
+      console.error(`Failed to process ${key}: ${error}`);
+    }
+  }
+} 

@@ -1,7 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { aws_s3 as s3 } from 'aws-cdk-lib';
 import { Effect, PolicyStatement } from 'aws-cdk-lib/aws-iam';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { S3EventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 
@@ -31,5 +30,20 @@ export class XebiaServerlesCdkTrainingStack extends cdk.Stack {
     });
 
     lambdaA.addEventSource(source);
+
+    const inputBucket = new s3.Bucket(this, 'input-bucket', {
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true
+    });
+
+    inputBucket.grantPut(lambdaA); // is this line necessary?
+
+    const failureBucket = new s3.Bucket(this, 'failure-bucket', {
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true
+    });
+
+    failureBucket.grantPut(lambdaA); // is this line necessary?
+
   }
 }
