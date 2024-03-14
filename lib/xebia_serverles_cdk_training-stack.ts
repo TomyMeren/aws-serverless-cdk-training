@@ -36,7 +36,14 @@ export class XebiaServerlesCdkTrainingStack extends cdk.Stack {
       autoDeleteObjects: true
     });
 
-    inputBucket.grantPut(lambdaA); //Comprobar si es necesario
+    inputBucket.grantPut(lambdaA); // is this line necessary?
+
+    const failureBucket = new s3.Bucket(this, 'failure-bucket', {
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true
+    });
+
+    failureBucket.grantPut(lambdaA); // is this line necessary?
 
   }
 }

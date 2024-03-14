@@ -8,7 +8,8 @@ const gzip = promisify(zlib.gzip);
 export async function handler(event: S3Event): Promise<any> {
   const s3 = new AWS.S3();
 
-  const bucketName = 'xebiaserverlescdktrainingstack-inputbucket08d572f4-qvqfnssroxgn';
+  const inputBucketName = 'xebiaserverlescdktrainingstack-inputbucket08d572f4-qvqfnssroxgn';
+  const failBucketName = 'xebiaserverlescdktrainingsta-failurebucket4b3e4892-r8rqpkovpiqv';
 
   for (const record of event.Records) {
     const key = record.s3.object.key;
@@ -21,18 +22,31 @@ export async function handler(event: S3Event): Promise<any> {
       };
 
       const data = await s3.getObject(params).promise();
+      const body = data.Body as Buffer;
 
-      // Zip file
-      const zippedData = await gzip(data.Body as Buffer);
+      //Check if the file cointains the word "Hello"
+      if (body.toString().includes('Hello')) {
+        // Save file to another bucket after zip
+        // Zip file
+        const zippedData = await gzip(data.Body as Buffer);
 
-      // Save zipped file to another bucket
-      const uploadParams = {
-        Bucket: bucketName,
-        Key: key + '.gz', // Appending .gz extension to indicate it's gzipped
-        Body: zippedData,
-      };
+        const uploadParams = {
+          Bucket: inputBucketName,
+          Key: key + '.gz',
+          Body: zippedData,
+        };
 
-      await s3.putObject(uploadParams).promise();
+        await s3.putObject(uploadParams).promise();
+      } else {
+        // Save file to another bucket
+        const uploadParams = {
+          Bucket: failBucketName,
+          Key: key,
+          Body: data.Body,
+        };
+
+        await s3.putObject(uploadParams).promise();
+      }
     } catch (error) {
       console.error(`Failed to process ${key}: ${error}`);
     }
